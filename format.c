@@ -1,10 +1,31 @@
-#include "display.h"
-#include "util.h"
-#include "sort.h"
-#include <sys/sysmacros.h>
+#include "format.h"
 
-void format_mode_str(mode_t mode, char *buf) {
-    /* 1. File type character */
+void free_file_info(FileInfo *entry) {
+    if (!entry) return;
+    if (entry->name) {
+        free(entry->name);
+        entry->name = NULL;
+    }
+    if (entry->path) {
+        free(entry->path);
+        entry->path = NULL;
+    }
+    if (entry->link_target) {
+        free(entry->link_target);
+        entry->link_target = NULL;
+    }
+}
+
+void free_file_infos(FileInfo *entries, size_t count) {
+    if (!entries) return;
+    for (size_t i = 0; i < count; ++i) {
+        free_file_info(&entries[i]);
+    }
+    free(entries);
+}
+
+void format_mode(mode_t mode, char *buf) {
+    /* 1. Ký tự phân loại loại tệp */
     if (S_ISDIR(mode)) {
         buf[0] = 'd';
     } else if (S_ISLNK(mode)) {
@@ -25,7 +46,7 @@ void format_mode_str(mode_t mode, char *buf) {
         buf[0] = '-';
     }
 
-    /* 2. Owner permissions */
+    /* 2. Quyền của chủ sở hữu (Owner) */
     buf[1] = (mode & S_IRUSR) ? 'r' : '-';
     buf[2] = (mode & S_IWUSR) ? 'w' : '-';
     if (mode & S_ISUID) {
@@ -34,7 +55,7 @@ void format_mode_str(mode_t mode, char *buf) {
         buf[3] = (mode & S_IXUSR) ? 'x' : '-';
     }
 
-    /* 3. Group permissions */
+    /* 3. Quyền của nhóm (Group) */
     buf[4] = (mode & S_IRGRP) ? 'r' : '-';
     buf[5] = (mode & S_IWGRP) ? 'w' : '-';
     if (mode & S_ISGID) {
@@ -43,7 +64,7 @@ void format_mode_str(mode_t mode, char *buf) {
         buf[6] = (mode & S_IXGRP) ? 'x' : '-';
     }
 
-    /* 4. Other permissions */
+    /* 4. Quyền của người khác (Others) */
     buf[7] = (mode & S_IROTH) ? 'r' : '-';
     buf[8] = (mode & S_IWOTH) ? 'w' : '-';
     if (mode & S_ISVTX) {
@@ -106,14 +127,26 @@ static void get_group_str(gid_t gid, bool opt_n, char *buf, size_t len) {
     snprintf(buf, len, "%u", (unsigned int)gid);
 }
 
-static col_widths_t compute_column_widths(const file_entry_t *entries, size_t count, const ls_options_t *opts) {
+static time_t get_time_field(const struct stat *st, time_type_t ttype) {
+    switch (ttype) {
+        case TIME_STATUS_CHANGE:
+            return st->st_ctime;
+        case TIME_ACCESS:
+            return st->st_atime;
+        case TIME_MODIFIED:
+        default:
+            return st->st_mtime;
+    }
+}
+
+static col_widths_t compute_column_widths(const FileInfo *entries, size_t count, const Options *opts) {
     col_widths_t w;
     memset(&w, 0, sizeof(w));
 
     char tmp[256];
 
     for (size_t i = 0; i < count; ++i) {
-        const file_entry_t *e = &entries[i];
+        const FileInfo *e = &entries[i];
         if (e->stat_err != 0) continue;
 
         if (opts->opt_i) {
@@ -124,7 +157,7 @@ static col_widths_t compute_column_widths(const file_entry_t *entries, size_t co
         if (opts->opt_s) {
             int bw = 0;
             if (opts->block_fmt == BLOCK_HUMAN) {
-                humanize_size((uint64_t)e->st.st_blocks * 512ULL, tmp, sizeof(tmp));
+                human_readable((uint64_t)e->st.st_blocks * 512ULL, tmp, sizeof(tmp));
                 bw = (int)strlen(tmp);
             } else {
                 long long blks = calc_blocks(&e->st, opts);
@@ -153,7 +186,7 @@ static col_widths_t compute_column_widths(const file_entry_t *entries, size_t co
         } else {
             int sw = 0;
             if (opts->block_fmt == BLOCK_HUMAN) {
-                humanize_size((uint64_t)e->st.st_size, tmp, sizeof(tmp));
+                human_readable((uint64_t)e->st.st_size, tmp, sizeof(tmp));
                 sw = (int)strlen(tmp);
             } else {
                 sw = int_width((long long)e->st.st_size);
@@ -172,7 +205,7 @@ static col_widths_t compute_column_widths(const file_entry_t *entries, size_t co
     return w;
 }
 
-void print_single_entry(const file_entry_t *entry, const ls_options_t *opts, const col_widths_t *widths) {
+void print_single_entry(const FileInfo *entry, const Options *opts, const col_widths_t *widths) {
     if (entry->stat_err != 0) {
         report_error(entry->name ? entry->name : entry->path, entry->stat_err);
         return;
@@ -184,7 +217,7 @@ void print_single_entry(const file_entry_t *entry, const ls_options_t *opts, con
         widths = &local_widths;
     }
 
-    /* Print Inode number (-i) */
+    /* 1. In số Inode (-i) */
     if (opts->opt_i) {
         if (opts->opt_l && widths) {
             printf("%*llu ", widths->max_inode_w, (unsigned long long)entry->st.st_ino);
@@ -193,11 +226,11 @@ void print_single_entry(const file_entry_t *entry, const ls_options_t *opts, con
         }
     }
 
-    /* Print Block count (-s) */
+    /* 2. In số Block (-s) */
     if (opts->opt_s) {
         if (opts->block_fmt == BLOCK_HUMAN) {
             char blk_buf[32];
-            humanize_size((uint64_t)entry->st.st_blocks * 512ULL, blk_buf, sizeof(blk_buf));
+            human_readable((uint64_t)entry->st.st_blocks * 512ULL, blk_buf, sizeof(blk_buf));
             if (opts->opt_l && widths) {
                 printf("%*s ", widths->max_block_w, blk_buf);
             } else {
@@ -214,40 +247,40 @@ void print_single_entry(const file_entry_t *entry, const ls_options_t *opts, con
     }
 
     if (opts->opt_l) {
-        /* File mode */
+        /* File mode 10 ký tự */
         char mode_str[12];
-        format_mode_str(entry->st.st_mode, mode_str);
+        format_mode(entry->st.st_mode, mode_str);
         printf("%s ", mode_str);
 
-        /* Number of links */
+        /* Số liên kết cứng (hard links) */
         printf("%*lu ", widths->max_nlink_w, (unsigned long)entry->st.st_nlink);
 
-        /* Owner name */
+        /* Tên hoặc ID chủ sở hữu */
         char owner_buf[64];
         get_owner_str(entry->st.st_uid, opts->opt_n, owner_buf, sizeof(owner_buf));
         printf("%-*s  ", widths->max_owner_w, owner_buf);
 
-        /* Group name */
+        /* Tên hoặc ID nhóm */
         char group_buf[64];
         get_group_str(entry->st.st_gid, opts->opt_n, group_buf, sizeof(group_buf));
         printf("%-*s  ", widths->max_group_w, group_buf);
 
-        /* Size or Device Major/Minor */
+        /* Kích thước hoặc thiết bị đặc biệt Major/Minor */
         if (S_ISCHR(entry->st.st_mode) || S_ISBLK(entry->st.st_mode)) {
             printf("%*u, %*u ", widths->max_major_w, major(entry->st.st_rdev),
                                 widths->max_minor_w, minor(entry->st.st_rdev));
         } else {
             if (opts->block_fmt == BLOCK_HUMAN) {
                 char size_buf[32];
-                humanize_size((uint64_t)entry->st.st_size, size_buf, sizeof(size_buf));
+                human_readable((uint64_t)entry->st.st_size, size_buf, sizeof(size_buf));
                 printf("%*s ", widths->max_size_w, size_buf);
             } else {
                 printf("%*lld ", widths->max_size_w, (long long)entry->st.st_size);
             }
         }
 
-        /* Timestamp: abbreviated month, day-of-month, hour and minute */
-        time_t ftime = get_entry_time(&entry->st, opts->time_type);
+        /* Thời gian: tháng viết tắt, ngày trong tháng, giờ và phút */
+        time_t ftime = get_time_field(&entry->st, opts->time_type);
         struct tm tm_buf;
         localtime_r(&ftime, &tm_buf);
         char time_str[32];
@@ -255,10 +288,10 @@ void print_single_entry(const file_entry_t *entry, const ls_options_t *opts, con
         printf("%s ", time_str);
     }
 
-    /* Pathname */
-    print_name(entry->name ? entry->name : entry->path, opts);
+    /* Tên file */
+    print_escaped_name(entry->name ? entry->name : entry->path, opts);
 
-    /* Indicator character for -F */
+    /* Ký hiệu phân loại cho -F */
     if (opts->opt_F) {
         char ind = get_type_indicator(entry->st.st_mode);
         if (ind != '\0') {
@@ -266,29 +299,25 @@ void print_single_entry(const file_entry_t *entry, const ls_options_t *opts, con
         }
     }
 
-    /* Symlink destination for -l */
+    /* Đích đến của liên kết tượng trưng (-l) */
     if (opts->opt_l && S_ISLNK(entry->st.st_mode) && entry->link_target) {
         printf(" -> ");
-        print_name(entry->link_target, opts);
+        print_escaped_name(entry->link_target, opts);
         if (opts->opt_F) {
-            /* Check target indicator if accessible */
             struct stat target_st;
-            char *resolved = path_join(entry->path, entry->link_target);
-            /* Or stat relative to dir of entry */
             if (stat(entry->path, &target_st) == 0) {
                 char target_ind = get_type_indicator(target_st.st_mode);
                 if (target_ind != '\0') {
                     putchar(target_ind);
                 }
             }
-            free(resolved);
         }
     }
 
     putchar('\n');
 }
 
-void print_entries(file_entry_t *entries, size_t count, const ls_options_t *opts, bool is_dir_contents) {
+void print_entries(FileInfo *entries, size_t count, const Options *opts, bool is_dir_contents) {
     if (!entries || count == 0) {
         return;
     }
@@ -298,11 +327,7 @@ void print_entries(file_entry_t *entries, size_t count, const ls_options_t *opts
         widths = compute_column_widths(entries, count, opts);
     }
 
-    /*
-     * Directory total line:
-     * - In -l, total number of blocks used by files in the directory is output immediately before files.
-     * - In -s, if output is to a terminal, total sum is output before listing.
-     */
+    /* In dòng total khi dùng -l cho thư mục, hoặc -s khi xuất ra terminal */
     bool should_print_total = false;
     if (is_dir_contents && opts->opt_l) {
         should_print_total = true;
@@ -323,7 +348,7 @@ void print_entries(file_entry_t *entries, size_t count, const ls_options_t *opts
 
         if (opts->block_fmt == BLOCK_HUMAN) {
             char hum_buf[32];
-            humanize_size(total_bytes, hum_buf, sizeof(hum_buf));
+            human_readable(total_bytes, hum_buf, sizeof(hum_buf));
             printf("total %s\n", hum_buf);
         } else {
             printf("total %lld\n", total_blocks);

@@ -1,11 +1,12 @@
 # Compiled binaries
+myls
 ls
 *.out
 
 # Object files
 *.o
 
-# Build directory / artifacts
+# Build artifacts
 build/
 bin/
 obj/
@@ -17,6 +18,7 @@ obj/
 .vscode/
 .idea/
 
-# Test temp directories
+# Test temporary directories
 test_dir/
 test_tmp*/
+test_sandbox_tmp/

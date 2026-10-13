@@ -1,30 +1,25 @@
 CC ?= gcc
-CFLAGS ?= -Wall -Wextra -Werror -pedantic -std=gnu99 -O2 -g -Iinclude
-TARGET = ls
+CFLAGS ?= -Wall -Wextra -Werror -pedantic -std=gnu11 -D_DEFAULT_SOURCE -D_POSIX_C_SOURCE=200809L -O2 -g
 
-SRCS = src/main.c \
-       src/display.c \
-       src/sort.c \
-       src/traversal.c \
-       src/util.c
-
-OBJS = $(SRCS:src/%.c=obj/%.o)
+TARGET = myls
+SRCS = main.c options.c list.c format.c util.c
+OBJS = $(SRCS:.c=.o)
 
 .PHONY: all clean test
 
-all: $(TARGET)
+all: $(TARGET) ls
 
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $(OBJS)
 
-obj/%.o: src/%.c | obj
+ls: $(TARGET)
+	@ln -sf $(TARGET) ls
+
+%.o: %.c options.h list.h format.h util.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-obj:
-	mkdir -p obj
-
 clean:
-	rm -rf obj $(TARGET)
+	rm -f $(OBJS) $(TARGET) ls
 
 test: all
 	@chmod +x tests/test_ls.sh

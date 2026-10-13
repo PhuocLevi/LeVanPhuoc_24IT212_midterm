@@ -1,6 +1,7 @@
 #include "util.h"
+#include "options.h"
 
-void *safe_malloc(size_t size) {
+void *xmalloc(size_t size) {
     void *ptr = malloc(size);
     if (!ptr && size > 0) {
         fprintf(stderr, "ls: out of memory (malloc %zu bytes failed)\n", size);
@@ -9,7 +10,7 @@ void *safe_malloc(size_t size) {
     return ptr;
 }
 
-void *safe_realloc(void *ptr, size_t size) {
+void *xrealloc(void *ptr, size_t size) {
     void *new_ptr = realloc(ptr, size);
     if (!new_ptr && size > 0) {
         fprintf(stderr, "ls: out of memory (realloc %zu bytes failed)\n", size);
@@ -18,7 +19,7 @@ void *safe_realloc(void *ptr, size_t size) {
     return new_ptr;
 }
 
-char *safe_strdup(const char *s) {
+char *xstrdup(const char *s) {
     if (!s) return NULL;
     char *res = strdup(s);
     if (!res) {
@@ -28,16 +29,14 @@ char *safe_strdup(const char *s) {
     return res;
 }
 
-char *path_join(const char *dir, const char *file) {
+char *join_path(const char *dir, const char *file) {
     if (!dir || dir[0] == '\0') {
-        return safe_strdup(file);
+        return xstrdup(file);
     }
     size_t dlen = strlen(dir);
     size_t flen = strlen(file);
 
-    /* Allocate space for dir + optional '/' + file + '\0' */
-    char *res = safe_malloc(dlen + flen + 2);
-
+    char *res = xmalloc(dlen + flen + 2);
     strcpy(res, dir);
     if (res[dlen - 1] != '/') {
         res[dlen] = '/';
@@ -48,28 +47,25 @@ char *path_join(const char *dir, const char *file) {
     return res;
 }
 
-void free_file_entry(file_entry_t *entry) {
-    if (!entry) return;
-    if (entry->name) {
-        free(entry->name);
-        entry->name = NULL;
-    }
-    if (entry->path) {
-        free(entry->path);
-        entry->path = NULL;
-    }
-    if (entry->link_target) {
-        free(entry->link_target);
-        entry->link_target = NULL;
-    }
-}
+void human_readable(uint64_t bytes, char *buf, size_t buf_len) {
+    static const char prefixes[] = "BKMGTPE";
+    double val = (double)bytes;
+    int scale = 0;
 
-void free_file_entries(file_entry_t *entries, size_t count) {
-    if (!entries) return;
-    for (size_t i = 0; i < count; ++i) {
-        free_file_entry(&entries[i]);
+    while (val >= 1024.0 && scale < (int)(sizeof(prefixes) - 2)) {
+        val /= 1024.0;
+        scale++;
     }
-    free(entries);
+
+    if (scale == 0) {
+        snprintf(buf, buf_len, "%uB", (unsigned int)bytes);
+    } else {
+        if (val < 10.0) {
+            snprintf(buf, buf_len, "%.1f%c", val, prefixes[scale]);
+        } else {
+            snprintf(buf, buf_len, "%.0f%c", val, prefixes[scale]);
+        }
+    }
 }
 
 long parse_blocksize(const char *env_val) {
@@ -100,8 +96,8 @@ long parse_blocksize(const char *env_val) {
     return val;
 }
 
-long long calc_blocks(const struct stat *st, const ls_options_t *opts) {
-    /* st_blocks is always in 512-byte units on POSIX */
+long long calc_blocks(const struct stat *st, const Options *opts) {
+    /* st_blocks luôn ở đơn vị 512 bytes trên POSIX/BSD */
     long long bytes = (long long)st->st_blocks * 512LL;
     long bs = 512;
 
@@ -110,36 +106,13 @@ long long calc_blocks(const struct stat *st, const ls_options_t *opts) {
     } else if (opts->block_fmt == BLOCK_DEFAULT) {
         bs = opts->blocksize > 0 ? opts->blocksize : 512;
     } else {
-        /* BLOCK_HUMAN: block unit defaults to 512 */
         bs = 512;
     }
 
-    /* Round up partial blocks */
     return (bytes + bs - 1) / bs;
 }
 
-void humanize_size(uint64_t bytes, char *buf, size_t buf_len) {
-    static const char prefixes[] = "BKMGTPE";
-    double val = (double)bytes;
-    int scale = 0;
-
-    while (val >= 1024.0 && scale < (int)(sizeof(prefixes) - 2)) {
-        val /= 1024.0;
-        scale++;
-    }
-
-    if (scale == 0) {
-        snprintf(buf, buf_len, "%uB", (unsigned int)bytes);
-    } else {
-        if (val < 10.0) {
-            snprintf(buf, buf_len, "%.1f%c", val, prefixes[scale]);
-        } else {
-            snprintf(buf, buf_len, "%.0f%c", val, prefixes[scale]);
-        }
-    }
-}
-
-void print_name(const char *name, const ls_options_t *opts) {
+void print_escaped_name(const char *name, const Options *opts) {
     if (!name) return;
 
     if (opts->opt_q) {

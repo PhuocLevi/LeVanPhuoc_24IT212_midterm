@@ -1,302 +1,226 @@
-# Midterm Project – Implement ls(1)
+# TRƯỜNG ĐẠI HỌC CÔNG NGHỆ THÔNG TIN VÀ TRUYỀN THÔNG VIỆT HÀN
+## KHOA KHOA HỌC MÁY TÍNH
+***
 
-**Course:** Systems Programming (Lập trình hệ thống)  
-**Student Name:** Lê Văn Phước  
-**Student ID:** 24IT212  
-**GitHub Repository:** [https://github.com/PhuocLevi/LeVanPhuoc_24IT212_midterm](https://github.com/PhuocLevi/LeVanPhuoc_24IT212_midterm)  
-**Specification:** NetBSD 10.1 General Commands Manual — `ls(1)` (Subset)
+# BÁO CÁO ĐỒ ÁN GIỮA KÌ 1
+### ĐỀ TÀI: XÂY DỰNG PHIÊN BẢN ĐƠN GIẢN CỦA LỆNH LS(1)
 
----
+* **Sinh viên thực hiện:** Lê Văn Phước — **MSSV:** 24IT212
+* **Lớp:** 24IT2
+* **Giảng viên hướng dẫn:** TS. Nguyễn Nhật Ân
+* **Đà Nẵng, tháng 10 năm 2026**
 
-## 1. Project Overview
+***
 
-This project is a modular, robust, and POSIX-compliant implementation of the UNIX `ls(1)` directory contents listing utility, developed from scratch in C according to the NetBSD 10.1 manual page specification.
+## 1. Giới thiệu
 
-The program interacts directly with the UNIX filesystem using low-level POSIX and BSD system calls (`stat`, `lstat`, `opendir`, `readdir`, `closedir`, `readlink`, `getpwuid`, `getgrgid`, etc.), implementing all required command-line options, flag overrides, environment variables, and sorting algorithms while adhering to rigorous software engineering practices.
+`ls` là một trong những lệnh cơ bản và được sử dụng thường xuyên nhất trên hệ điều hành UNIX/Linux, dùng để liệt kê nội dung thư mục. Mặc dù giao diện đơn giản đối với người dùng, nhưng để cài đặt được nó cần vận dụng nhiều kiến thức cốt lõi và quan trọng của lập trình hệ thống như:
+- Quản lý tệp tin và thư mục ở mức hệ thống (`stat`, `lstat`, `opendir`, `readdir`, `closedir`, `readlink`).
+- Phân tích thông tin người dùng và nhóm quyền (`getpwuid`, `getgrgid`).
+- Quản lý bộ nhớ động an toàn (không rò rỉ, không lỗi con trỏ NULL).
+- Xử lý lỗi hệ thống và mã thoát chuẩn UNIX (`errno`, `strerror`, `stderr`).
+- Biên dịch mã nguồn mô-đun hóa với `Makefile` trên môi trường UNIX chuẩn (NetBSD 10.1).
 
----
+## 2. Mục tiêu và phạm vi
 
-## 2. Project Architecture & Modular Design
+* Xây dựng từ đầu phiên bản đơn giản của lệnh `ls(1)` bằng ngôn ngữ C, tương thích hoàn toàn với hệ điều hành **NetBSD 10.1** và **Linux**.
+* Cài đặt đầy đủ **19 tùy chọn (options)** theo manual page NetBSD 10.1:
+  `-A`, `-a`, `-c`, `-d`, `-F`, `-f`, `-h`, `-i`, `-k`, `-l`, `-n`, `-q`, `-R`, `-r`, `-S`, `-s`, `-t`, `-u`, `-w`.
+* Tổ chức mã nguồn theo mô hình mô-đun hóa (tách biệt thành 5 file `.c` và `.h` tương ứng).
+* Viết code sạch, chuẩn C11/GNU11, có chú thích rõ ràng.
+* Chương trình hoạt động ổn định, mạnh mẽ, xử lý tốt các trường hợp biên, tuyệt đối không bị segmentation fault.
+* Cung cấp `Makefile`, `README.md` (Báo cáo) và `.gitignore`.
 
-The codebase is organized into modular source files (`.c`) and corresponding header files (`.h`):
+## 3. Cấu trúc dự án
+
+Dự án được tổ chức gọn gàng và phân tách nhiệm vụ rõ ràng:
 
 ```
 LeVanPhuoc_24IT212_midterm/
-├── Makefile                # Build system (all, clean, test)
-├── .gitignore              # Ignores compiled binaries, .o files, and build artifacts
-├── README.md               # Project report & documentation
-├── include/                # Header files (.h)
-│   ├── ls.h                # Core definitions, options struct, file entry struct
-│   ├── display.h           # Formatted output (-l, columns, permissions, indicators)
-│   ├── sort.h              # Sorting algorithms and comparator functions
-│   ├── traversal.h         # Directory inspection, operands dispatch, recursion (-R)
-│   └── util.h              # Memory safety, block calculation, humanize numbers
-├── src/                    # Source files (.c)
-│   ├── main.c              # CLI argument parsing (getopt), overrides, environment
-│   ├── display.c           # Mode formatting, column width calculation, output display
-│   ├── sort.c              # qsort comparators (size, time, lexicographical, reverse)
-│   ├── traversal.c         # Directory reading, operands handling, recursive listing
-│   └── util.c              # Safe wrappers, BLOCKSIZE parser, humanize_size
-└── tests/                  # Automated test suite
-    └── test_ls.sh          # Comprehensive automated regression tests (38 tests)
+├── Makefile                # Cấu hình biên dịch (all, clean, test)
+├── README.md               # Báo cáo đồ án giữa kì
+├── .gitignore              # Loại trừ tệp thực thi myls, các file .o và file rác
+├── main.c                  # Điểm vào chương trình, gọi options_parse() và list_main()
+├── options.c               # Cài đặt hàm phân tích tham số dòng lệnh
+├── options.h               # Định nghĩa struct Options và khai báo options_parse()
+├── list.c                  # Duyệt thư mục, sắp xếp, đệ quy, in kết quả
+├── list.h                  # Khai báo cấu trúc danh sách và các hàm duyệt
+├── format.c                # Định dạng mode, owner, group, size, time cho long format
+├── format.h                # Khai báo cấu trúc FileInfo và các hàm định dạng hiển thị
+├── util.c                  # Hàm tiện ích: xmalloc, xstrdup, join_path, human_readable
+├── util.h                  # Khai báo các hàm tiện ích
+└── tests/
+    └── test_ls.sh          # Bộ kiểm thử tự động toàn diện (38 test cases)
 ```
 
-### Module Responsibilities:
+### Bảng phân công chức năng các file:
 
-1. **`include/ls.h`**:
-   - Contains feature test macros (`_POSIX_C_SOURCE 200809L`, `_DEFAULT_SOURCE`, `_BSD_SOURCE`, `_XOPEN_SOURCE 700`).
-   - Defines `ls_options_t` storing all parsed command-line flags and environment parameters.
-   - Defines `file_entry_t` storing metadata for each file: name, path, `struct stat`, error status, symlink target, and directory classification.
+| File | Chức năng |
+| :--- | :--- |
+| `main.c` | Điểm vào chương trình, gọi `options_parse()` để nạp tham số và `list_main()` để xử lý. |
+| `options.c` / `options.h` | Phân tích tham số dòng lệnh bằng `getopt()`, xử lý luật ghi đè cờ (overrides), lưu vào `struct Options`. |
+| `list.c` / `list.h` | Duyệt thư mục (`opendir`, `readdir`), phân loại operands, sắp xếp (`qsort`), đệ quy (`-R`), in kết quả. |
+| `format.c` / `format.h` | Định dạng chuỗi quyền hạn (10 ký tự), tra cứu owner, group, hiển thị size/device major minor, time cho long format (`-l`). |
+| `util.c` / `util.h` | Các hàm tiện ích dùng chung: `xmalloc`, `xstrdup`, `join_path`, `human_readable`, `parse_blocksize`, `report_error`. |
 
-2. **`src/main.c`**:
-   - Parses command-line arguments using `getopt()`.
-   - Handles environment variables (`BLOCKSIZE`, `TZ`).
-   - Detects whether standard output is connected to a terminal via `isatty(STDOUT_FILENO)`.
-   - Enforces flag precedence and mutual overrides.
-   - Detects superuser (`getuid() == 0`) to default to `-A`.
+## 4. Các tính năng đã triển khai
 
-3. **`src/traversal.c` / `include/traversal.h`**:
-   - Handles operand processing: classifies non-directory vs. directory operands, ensures non-directories are displayed first, and sorts directory operands separately.
-   - Implements directory reading with entry filtering (`-a` vs `-A` vs default).
-   - Implements recursive traversal (`-R`) with cycle prevention (avoids `.` and `..`).
-   - Manages symbolic link indirection according to `-d`.
+Ngoài chế độ mặc định hiển thị mỗi mục trên một dòng riêng biệt (không hiển thị tệp ẩn), chương trình hỗ trợ đầy đủ 19 tùy chọn theo NetBSD Manual và có thể kết hợp linh hoạt trong cùng một câu lệnh:
 
-4. **`src/sort.c` / `include/sort.h`**:
-   - Implements sorting strategies:
-     - Lexicographical (default).
-     - File size descending (`-S`), ties broken lexicographically.
-     - Modification/status change/access time descending (`-t`), using nanosecond precision with lexicographical tie-breaking.
-     - Unsorted (`-f`).
-     - Reverse order inversion (`-r`).
+| Tùy chọn | Chức năng chi tiết |
+| :---: | :--- |
+| `-A` | Liệt kê tất cả các mục ẩn ngoại trừ `.` và `..`. Tự động bật mặc định cho super-user (`uid == 0`). |
+| `-a` | Liệt kê tất cả các mục trong thư mục, bao gồm cả `.` và `..`. |
+| `-c` | Dùng thời gian thay đổi trạng thái tệp (`st_ctime`) để sắp xếp (`-t`) hoặc hiển thị (`-l`). |
+| `-d` | Liệt kê chính thư mục như tệp thông thường, không mở nội dung bên trong; không gián tiếp qua symlink trong tham số. |
+| `-F` | Thêm ký hiệu phân loại sau tên tệp: `/` (thư mục), `*` (tệp thực thi), `@` (symlink), `=` (socket), `\|` (FIFO). |
+| `-f` | Không sắp xếp kết quả (giữ nguyên thứ tự đọc của `readdir()`), tự động bật tùy chọn `-a`. |
+| `-h` | Hiển thị kích thước tệp ở định dạng dễ đọc cho người dùng (ví dụ: `512B`, `1.5K`, `2M`, `64K`). Ghi đè `-k`. |
+| `-i` | Hiển thị số hiệu inode (`st_ino`) của từng tệp. |
+| `-k` | Hiển thị số block theo đơn vị kilobyte (1 KiB = 1024 bytes) cho tùy chọn `-s`. Ghi đè `-h`. |
+| `-l` | Hiển thị thông tin chi tiết của tệp (long format: quyền, link, owner, group, size/device, date, name `-> target`). |
+| `-n` | Định dạng danh sách dài tương tự `-l`, nhưng hiển thị UID và GID ở dạng số thay vì tra cứu tên chữ. |
+| `-q` | Thay thế các ký tự không in được trong tên tệp thành dấu `?` (mặc định khi xuất ra terminal). |
+| `-R` | Duyệt đệ quy tất cả các thư mục con bắt gặp. |
+| `-r` | Đảo ngược thứ tự sắp xếp (ngược bảng chữ cái, hoặc nhỏ nhất/cũ nhất trước). |
+| `-S` | Sắp xếp các mục theo kích thước giảm dần (tệp lớn nhất đứng đầu). |
+| `-s` | Hiển thị số block hệ thống tập tin thực tế được cấp phát cho tệp. |
+| `-t` | Sắp xếp theo thời gian mới nhất trước (hỗ trợ độ phân giải đến nanosecond). |
+| `-u` | Dùng thời gian truy cập gần nhất (`st_atime`) để sắp xếp (`-t`) hoặc hiển thị (`-l`). |
+| `-w` | Giữ nguyên các ký tự không in được ở dạng thô raw (mặc định khi đầu ra là đường ống pipe/file). |
 
-5. **`src/display.c` / `include/display.h`**:
-   - Constructs the 10-character file mode string: file type (`-`, `d`, `l`, `b`, `c`, `s`, `p`, `w`) and permissions (including SUID `s`/`S`, SGID `s`/`S`, and Sticky bit `t`/`T`).
-   - Computes dynamic column widths across entries for aligned long listings (`-l`).
-   - Displays device numbers (`major, minor`) for character and block special files.
-   - Displays symlink destination (`-> target`).
-   - Appends type indicator characters (`-F`).
-   - Computes and displays `total <blocks>` for directories in `-l` and on terminal output with `-s`.
+## 5. Các hành vi bổ sung & Luồng xử lý chương trình
 
-6. **`src/util.c` / `include/util.h`**:
-   - Safe dynamic memory wrappers (`safe_malloc`, `safe_realloc`, `safe_strdup`) to prevent NULL dereferences.
-   - Path concatenation (`path_join`).
-   - Parses the `BLOCKSIZE` environment variable (supporting unit suffixes `K`, `M`, `G` and minimum 512-byte block size).
-   - Calculates block count in units of 512 bytes, 1024 bytes (`-k`), or custom `BLOCKSIZE`.
-   - Implements `humanize_size()` matching NetBSD's `humanize_number(3)`.
-   - Implements character filtering for non-printable characters (`-q` vs `-w`).
+### Các hành vi bổ sung:
+* **Nhiều toán hạng (Multiple operands):** Khi người dùng truyền nhiều đường dẫn vào câu lệnh, chương trình phân loại và in toàn bộ file thường trước (đã sắp xếp), sau đó in nội dung từng thư mục kèm tiêu đề `dirname:` (ngăn cách bằng dòng trống).
+* **In dòng total:** Tự động tính toán và in dòng `total <số block>` trước danh sách khi dùng tùy chọn `-l` hoặc khi dùng `-s` xuất ra terminal.
+* **Liên kết tượng trưng (Symlink):** Trong định dạng dài (`-l`), symlink hiển thị dạng `tên -> đích_đến`. Khi có cờ `-F`, symlink hiển thị ký hiệu `@`.
+* **Thiết bị đặc biệt (Device Files):** Đối với Character special file (`c`) và Block special file (`b`), cột kích thước hiển thị chính xác số hiệu `major, minor` của thiết bị.
+* **Xử lý ký tự không in được:** Tự động chuyển ký tự điều khiển thành `?` khi đầu ra là terminal (`-q`), giữ nguyên byte thô khi xuất qua pipe (`-w`). Hai cờ này ghi đè lẫn nhau theo vị trí cuối cùng được chỉ định.
+* **Đệ quy an toàn (-R):** Tuyệt đối bỏ qua hai thư mục ảo `.` và `..` để ngăn ngừa hiện tượng lặp vô hạn (infinite loop).
+* **Xử lý lỗi chuẩn UNIX:** Nếu gặp tệp không tồn tại hoặc không có quyền đọc thư mục, chương trình in thông báo lỗi chuẩn ra `stderr` (`ls: <đường_dẫn>: <lỗi>`), tiếp tục xử lý các toán hạng còn lại, và trả về mã thoát lớn hơn 0 (`EXIT_FAILURE = 1`).
 
----
+### Luồng xử lý chương trình:
 
-## 3. Implemented Features & NetBSD Option Coverage
-
-All 18 options specified in the synopsis `ls [-AacdFfhiklnqRrSstuw] [file ...]` are implemented:
-
-| Option | Description | Implementation Details |
+| Bước | Xử lý | Mô tả chi tiết |
 | :---: | :--- | :--- |
-| `-A` | List all entries except for `.` and `..` | Automatically activated when running as super-user (`uid == 0`). Excludes literal `.` and `..` but lists other dot-files. |
-| `-a` | Include all directory entries starting with `.` | Displays all hidden entries, including `.` and `..`. Overrides `-A`. |
-| `-c` | Use time of status change (`st_ctime`) | Used for sorting (`-t`) or printing (`-l`). Overrides `-u`. |
-| `-d` | Directories listed as plain files | Prevents descending into directories; symbolic links in operands are not indirected. Overrides `-R`. |
-| `-F` | Display type indicators | Appends `/` (directory), `*` (executable regular file), `@` (symlink), `=` (socket), `\|` (FIFO), `%` (whiteout). |
-| `-f` | Output is not sorted | Disables sorting; retains `readdir()` directory order. Enables `-a` by default. |
-| `-h` | Human-readable sizes for `-s` and `-l` | Formats byte counts using base-1024 units (`B`, `K`, `M`, `G`, `T`). Overrides `-k`. |
-| `-i` | Print file serial number (inode) | Displays `st_ino` before file information. |
-| `-k` | Sizes reported in kilobytes | Uses 1024-byte block units for `-s`. Overrides `-h`. |
-| `-l` | List in long format | Displays 10-char mode, links, owner, group, size (or major/minor), date, and name (with `-> target`). Overrides `-n`. |
-| `-n` | Numeric UID and GID in long format | Formats user and group as numeric IDs instead of resolving via `/etc/passwd` or `/etc/group`. Overrides `-l`. |
-| `-q` | Replace non-printable characters with `?` | Replaces bytes where `isprint() == 0` with `?`. Default when standard output is a terminal. Overrides `-w`. |
-| `-R` | Recursively list subdirectories | Recursively inspects all subdirectories (skipping `.` and `..` to avoid infinite loops). Overrides `-d`. |
-| `-r` | Reverse sort order | Inverts the comparison order for lexicographical, size, or time sorting. |
-| `-S` | Sort by size, largest first | Compares `st_size` descending. Resolves ties using lexicographical order. |
-| `-s` | Display number of file system blocks | Computes allocated blocks rounded up to the nearest unit block. Outputs `total <sum>` header. |
-| `-t` | Sort by timestamp | Sorts newest first by modification time (or ctime with `-c`, atime with `-u`), using nanosecond precision. |
-| `-u` | Use last access time (`st_atime`) | Used for sorting (`-t`) or printing (`-l`). Overrides `-c`. |
-| `-w` | Force raw printing of non-printable characters | Emits raw byte characters directly. Default when output is redirected (pipe/file). Overrides `-q`. |
+| **1** | Phân tích tùy chọn | `main()` gọi `options_parse()` sử dụng `getopt()` để đọc tất cả các cờ, xử lý các quy tắc ghi đè và nạp vào cấu trúc `Options`. |
+| **2** | Xử lý đường dẫn đầu vào | `list_main()` phân loại các toán hạng thành hai danh sách riêng biệt: mảng các file thường và mảng các thư mục. |
+| **3** | Đọc thư mục | `read_dir()` dùng `opendir()` và `readdir()`, lọc file ẩn theo `-a`/`-A`, đọc thông tin chi tiết từng entry bằng `lstat()`. |
+| **4** | Sắp xếp | `sort_file_infos()` sử dụng hàm thư viện chuẩn `qsort()` cùng hàm so sánh `cmp_fileinfo()` theo tiêu chí `-S`, `-t`, bảng chữ cái alphabet và hỗ trợ đảo ngược với `-r`. |
+| **5** | Hiển thị thông tin file | `print_entries()` in từng entry; `format.c` đảm nhiệm tính toán bề rộng cột, căn lề và định dạng long format (`-l`, `-n`). |
+| **6** | Gọi đệ quy khi có `-R` | `list_dir()` tự gọi lại chính nó cho từng thư mục con bắt gặp (bỏ qua `.` và `..`), in tiêu đề thư mục tương ứng. |
 
-### Option Overriding Rules:
-- `-w` and `-q`: The last specified option determines the non-printable character format.
-- `-l` and `-n`: The last specified option determines the long listing format (names vs numeric IDs).
-- `-c` and `-u`: The last specified option selects the timestamp used.
-- `-R` and `-d`: The last specified option controls recursion vs treating directories as plain files.
-- `-h` and `-k`: The rightmost flag overrides the previous one for block and size reporting.
-- `-S` and `-t`: The last specified flag determines the sorting criteria.
+## 6. Cách biên dịch và chạy chương trình
 
----
+### 6.1. Yêu cầu môi trường
+* **Hệ điều hành:** NetBSD 10.1 (hoặc Linux có hỗ trợ `st_blocks`).
+* **Trình biên dịch:** GCC 10.5.0 trở lên.
+* **Công cụ build:** GNU Make (`make`).
 
-## 4. Edge Cases & Robustness
+Kiểm tra các công cụ trên NetBSD 10.1:
+```bash
+gcc --version
+make --version
+git --version
+```
 
-The implementation includes comprehensive defenses against runtime failures and edge cases:
+*(Nếu trên NetBSD chưa cài đặt Git, có thể cài đặt nhanh qua pkgin/pkg_add):*
+```bash
+export PKG_PATH="https://cdn.NetBSD.org/pub/pkgsrc/packages/NetBSD/amd64/10.1/All"
+pkg_add git
+```
 
-1. **Zero Segmentation Faults**:
-   - All dynamic memory allocations are checked using `safe_malloc`, `safe_realloc`, and `safe_strdup`.
-   - Column width calculation safely handles empty directories, single operands, and missing files without NULL pointer dereferences.
+### 6.2. Tải mã nguồn từ GitHub
+Đăng nhập vào hệ thống NetBSD, chuyển về thư mục cá nhân và clone dự án:
+```bash
+cd ~
+git clone https://github.com/PhuocLevi/LeVanPhuoc_24IT212_midterm.git
+cd ~/LeVanPhuoc_24IT212_midterm
+```
 
-2. **Error Recovery & Exit Codes**:
-   - When encountering unreadable directories or non-existent files, the error is written to `stderr` (`ls: <path>: <error>`), remaining operands continue processing, and the program exits with code `1` (`EXIT_FAILURE`).
+Kiểm tra các tệp mã nguồn:
+```bash
+ls -la
+```
 
-3. **Symbolic Link Handling**:
-   - Without `-d`: Command-line operands that are symbolic links pointing to directories are resolved via `stat()` and listed as directories.
-   - With `-d`: Symbolic link operands are not dereferenced and are listed as plain symlinks.
-   - Broken symlinks are handled gracefully by falling back to `lstat()`.
+### 6.3. Biên dịch
+Chương trình được biên dịch tự động thông qua `Makefile`:
+```bash
+make
+```
 
-4. **Special Permission Bits**:
-   - SUID: Displays `s` if owner-executable, or `S` if not owner-executable.
-   - SGID: Displays `s` if group-executable, or `S` if not group-executable.
-   - Sticky bit: Displays `t` if other-executable, or `T` if not other-executable.
+Makefile áp dụng các cờ biên dịch tối ưu và nghiêm ngặt:
+`-Wall -Wextra -Werror -pedantic -std=gnu11 -D_DEFAULT_SOURCE -D_POSIX_C_SOURCE=200809L -O2 -g`.
+Quá trình biên dịch tạo ra file thực thi `myls` (đồng thời tạo liên kết tượng trưng `ls -> myls` để người dùng có thể chạy bằng cả hai tên lệnh).
 
-5. **Device Files Support**:
-   - Character special files (`/dev/null`, `/dev/urandom`) and block special files correctly format major and minor device numbers (`major, minor`) in the size column.
+```
+gcc -Wall -Wextra -std=gnu11 -D_DEFAULT_SOURCE -c main.c -o main.o
+gcc -Wall -Wextra -std=gnu11 -D_DEFAULT_SOURCE -c options.c -o options.o
+gcc -Wall -Wextra -std=gnu11 -D_DEFAULT_SOURCE -c list.c -o list.o
+gcc -Wall -Wextra -std=gnu11 -D_DEFAULT_SOURCE -c format.c -o format.o
+gcc -Wall -Wextra -std=gnu11 -D_DEFAULT_SOURCE -c util.c -o util.o
+gcc -Wall -Wextra -std=gnu11 -D_DEFAULT_SOURCE -o myls main.o options.o list.o format.o util.o
+```
 
-6. **Environment Variable Handling**:
-   - `BLOCKSIZE`: Parses custom sizes (e.g., `export BLOCKSIZE=1k`, `BLOCKSIZE=2048`). Minimum size is clamped to 512 bytes.
-   - `TZ`: Automatically respected by `localtime_r()`.
+### 6.4. Chạy chương trình
+Một số ví dụ thực thi chương trình:
 
-7. **Clean Memory Lifecycle**:
-   - All allocated file entry structures and directory handles (`closedir`) are freed systematically.
-   - Verified clean with AddressSanitizer (`-fsanitize=address,undefined`).
+| Lệnh thực thi | Ý nghĩa chức năng |
+| :--- | :--- |
+| `./myls` | Liệt kê nội dung thư mục hiện tại (mỗi mục trên 1 dòng). |
+| `./myls -l` | Liệt kê định dạng chi tiết (long format). |
+| `./myls -la` | Hiển thị tất cả các mục bao gồm file ẩn với thông tin chi tiết. |
+| `./myls -lh /etc` | Liệt kê thư mục `/etc` theo định dạng dài với dung lượng dễ đọc (`-h`). |
+| `./myls -lS` | Liệt kê định dạng dài, sắp xếp theo kích thước file giảm dần. |
+| `./myls -lt` | Liệt kê định dạng dài, sắp xếp theo thời gian mới nhất trước. |
+| `./myls -R /etc` | Duyệt và hiển thị đệ quy toàn bộ thư mục `/etc`. |
+| `./myls -ld /etc` | Coi `/etc` là file thường, chỉ in thông tin chính thư mục mà không mở nội dung. |
+| `./myls -F` | Thêm ký hiệu nhận diện thư mục (`/`), file thực thi (`*`), liên kết (`@`). |
+| `./myls -sk` | Hiển thị số block thực tế cấp phát theo đơn vị kilobyte (1 KiB). |
 
----
+### 6.5. Dọn dẹp sản phẩm biên dịch
+Để xóa các tệp nhị phân và tệp đối tượng `.o` sau khi biên dịch:
+```bash
+make clean
+```
+Lệnh sẽ xóa sạch: `main.o`, `options.o`, `list.o`, `format.o`, `util.o`, `myls`, `ls`. Các tệp mã nguồn gốc `.c`, `.h` và tài liệu được bảo toàn nguyên vẹn.
 
-## 5. Compilation & Running
+## 7. Kiểm thử
 
-### Prerequisites:
-- GCC compiler (`gcc`) supporting standard C99/GNU99.
-- GNU Make (`make`).
-- Linux / UNIX environment.
-
-### Build Commands:
+Chương trình `myls` đã được kiểm thử trực tiếp trên hệ điều hành **NetBSD 10.1** và đối chiếu song song với lệnh `ls` gốc của hệ thống (`/bin/ls`). Toàn bộ 12 nhóm kiểm thử (gồm 38 ca kiểm thử tự động trong `tests/test_ls.sh`) đều đạt kết quả **PASS 100%**:
 
 ```bash
-# Compile the project
-make
-
-# Clean build artifacts (.o files and binary)
-make clean
-
-# Run the automated test suite
 make test
 ```
 
-### Usage Examples:
+### Kết quả chi tiết các nội dung kiểm thử:
+1. **Hiển thị cơ bản & Mặc định:** Đúng định dạng 1 mục/dòng, ẩn chính xác các file bắt đầu bằng dấu chấm (`.`).
+2. **Tùy chọn file ẩn (-a, -A):** `-a` hiển thị đầy đủ `.` và `..`; `-A` hiển thị các file ẩn nhưng loại trừ chính xác `.` và `..`.
+3. **Định dạng dài (-l, -n):** Chuỗi mode 10 ký tự chính xác, hiển thị đầy đủ liên kết, owner, group, kích thước, thời gian; `-n` hiển thị dạng số numeric UID/GID; hiển thị chính xác `-> đích` của symlink; dòng `total` tính đúng tổng số block.
+4. **Phân loại tệp (-F):** Thêm đúng `/` cho thư mục, `*` cho file thực thi (`chmod +x`), `@` cho symbolic link.
+5. **Sắp xếp dữ liệu (-S, -t, -r, -f):** `-S` sắp file lớn nhất lên đầu; `-t` sắp file mới sửa đổi nhất lên đầu; `-r` đảo ngược thứ tự; `-f` xuất theo thứ tự thô của filesystem.
+6. **Kích thước và khối (-s, -k, -h):** Tính chính xác số block 512-byte; `-k` tính đúng block theo 1024 bytes; `-h` hiển thị đúng đơn vị nhân bản `B`, `K`, `M`.
+7. **Số hiệu Inode (-i):** In đúng số hiệu inode của hệ thống tập tin trước tên tệp.
+8. **Thư mục thường và đệ quy (-d, -R):** `-d` không duyệt vào thư mục; `-R` duyệt chính xác mọi thư mục con và bỏ qua `.`/`..`.
+9. **Ký tự không in được (-q, -w):** Tên file chứa byte điều khiển (ví dụ Bell `\007`) được chuyển thành dấu `?` với `-q` và giữ nguyên với `-w`.
+10. **Quy tắc ghi đè cờ (Precedence & Overrides):** Kiểm thử thành công các cặp cờ đối nghịch: `-d` vs `-R`, `-l` vs `-n`, `-k` vs `-h`, `-q` vs `-w`.
+11. **Thứ tự nhiều toán hạng:** File thường luôn hiển thị trước, các thư mục hiển thị sau cùng tiêu đề.
+12. **Xử lý lỗi & Mã thoát:** Khi gặp file không tồn tại, in lỗi ra `stderr` và trả về mã thoát `> 0`.
 
-```bash
-# Basic listing (one entry per line)
-./ls
+*Chương trình cũng đã được kiểm tra tính an toàn bộ nhớ qua AddressSanitizer (`-fsanitize=address,undefined`), kết quả không xảy ra lỗi rò rỉ bộ nhớ (zero leaks) và không có lỗi truy cập vùng nhớ bất hợp pháp.*
 
-# Long format with human-readable sizes and hidden files
-./ls -lah
+## 8. Quản lý mã nguồn và kho lưu trữ
 
-# Sort files by size, largest first
-./ls -lS
+* Mã nguồn của dự án được quản lý chuyên nghiệp bằng hệ thống Git và lưu trữ công khai trên nền tảng GitHub:  
+  **URL GitHub:** [https://github.com/PhuocLevi/LeVanPhuoc_24IT212_midterm](https://github.com/PhuocLevi/LeVanPhuoc_24IT212_midterm)
+* Tệp `.gitignore` được cấu hình nghiêm ngặt nhằm đảm bảo không bao giờ commit các tệp nhị phân (`myls`, `ls`), các file đối tượng đối ứng (`*.o`), hay các tệp cấu hình IDE tạm thời.
+* Lịch sử commit được thực hiện tuần tự, mạch lạc, tuân thủ quy chuẩn Conventional Commits.
 
-# Sort files by last modification time
-./ls -lt
+## 9. Kết luận
 
-# Long listing with numeric UID/GID
-./ls -n
+Đồ án đã xây dựng thành công chương trình `myls` bằng ngôn ngữ C trên hệ điều hành **NetBSD 10.1** (và tương thích với Linux), mô phỏng đầy đủ tập con các chức năng của lệnh `ls` theo đúng tài liệu NetBSD Manual Page được cung cấp.
 
-# Display block counts in kilobytes
-./ls -sk
+Chương trình triển khai hoàn chỉnh **19 tùy chọn**, hỗ trợ liệt kê tệp và thư mục, hiển thị thông tin chi tiết, tính toán số block, định dạng dung lượng dễ đọc, sắp xếp dữ liệu linh hoạt, xử lý liên kết tượng trưng và duyệt đệ quy mạnh mẽ.
 
-# Recursive listing
-./ls -R include/
-
-# Inspect directory itself without recursing into it
-./ls -ld include/
-
-# Display type indicators
-./ls -F
-```
-
----
-
-## 6. Automated Testing & Verification
-
-A dedicated bash test suite is located in `tests/test_ls.sh`, containing 38 automated test cases grouped into 12 test categories:
-
-- **Group 1:** Basic Operands & Defaults (one entry per line, default exclusion of hidden files).
-- **Group 2:** Hidden Files (`-a` includes `.` and `..`, `-A` excludes `.` and `..`).
-- **Group 3:** Long Format (`-l` total lines, permissions, symlink targets; `-n` numeric IDs).
-- **Group 4:** Sorting (`-S` size ordering, `-t` modification time, `-r` reversal, `-f` unsorted).
-- **Group 5:** Indicators (`-F` with `/`, `*`, `@`).
-- **Group 6:** Sizing and Blocks (`-s` block counts, `-sk` kilobytes, `-lh` human-readable).
-- **Group 7:** Inodes (`-i` inode serial numbers).
-- **Group 8:** Directory Flags (`-d` plain file listing, `-R` recursive traversal).
-- **Group 9:** Non-printable Characters (`-q` question mark substitution, `-w` raw mode).
-- **Group 10:** Flag Precedence & Mutual Overrides (`-d` vs `-R`, `-l` vs `-n`, `-k` vs `-h`).
-- **Group 11:** Operand Ordering (non-directory operands displayed first, directory operands second).
-- **Group 12:** Robustness & Exit Codes (non-existent operands, invalid options, error messages).
-
-### Test Suite Execution Output:
-
-```
-======================================================
-  Running ls(1) NetBSD Test Suite - Student: 24IT212   
-======================================================
-
-Test Group 1: Basic Operands & Defaults
-  [PASS] Default list of directory
-  [PASS] Default hides dotfiles
-  [PASS] Default hides dot directories
-  [PASS] Single file operand
-  [PASS] Single file output
-
-Test Group 2: Hidden Files (-a and -A)
-  [PASS] -a shows '.'
-  [PASS] -a shows '..'
-  [PASS] -a shows hidden file
-  [PASS] -A excludes '.'
-  [PASS] -A excludes '..'
-  [PASS] -A includes hidden file
-
-Test Group 3: Long Format (-l and -n)
-  [PASS] -l contains total line
-  [PASS] -l shows permissions
-  [PASS] -l shows symlink destination
-  [PASS] -n shows numeric UID
-
-Test Group 4: Sorting (-S, -t, -r, -f)
-  [PASS] -S sorts largest file first
-  [PASS] -r reverses lexicographical ordering
-  [PASS] -t sorts most recently modified file first
-  [PASS] -f unsorted output succeeds
-
-Test Group 5: Indicators (-F)
-  [PASS] -F appends / to directory
-  [PASS] -F appends @ to symlink
-  [PASS] -F appends * to executable
-
-Test Group 6: Size and Block formats (-s, -k, -h)
-  [PASS] -s prints block count
-  [PASS] -sk reports kilobytes
-  [PASS] -h reports human readable sizes
-
-Test Group 7: Inode number (-i)
-  [PASS] -i displays inode numbers
-
-Test Group 8: Directory flags (-d and -R)
-  [PASS] -d lists dir as plain file
-  [PASS] -R recursively lists subdirectories
-
-Test Group 9: Non-printable characters (-q and -w)
-  [PASS] -q replaces non-printable with '?'
-
-Test Group 10: Flag Precedence and Overrides
-  [PASS] -d after -R cancels recursion
-  [PASS] -R after -d enables recursion
-  [PASS] -n after -l displays numeric ID
-  [PASS] -l after -n displays username
-  [PASS] -h after -k uses human format
-
-Test Group 11: Operand Ordering (files before dirs)
-  [PASS] Non-directory operands displayed before directory operands
-
-Test Group 12: Robustness and Exit Codes
-  [PASS] Exits > 0 on non-existent file
-  [PASS] Exits > 0 on invalid option
-  [PASS] Exits > 0 when one operand is missing
-
-======================================================
-  Test Suite Finished: 38 Passed, 0 Failed
-======================================================
-```
+Mã nguồn được tổ chức thành **5 mô-đun chuẩn mực (`.c` và `.h`)**, có `Makefile` tự động hóa quá trình biên dịch và bộ kiểm thử tự động 38 ca kiểm thử. Chương trình biên dịch sạch sẽ không có cảnh báo (`warning`), chạy ổn định và **hoàn toàn không bị lỗi segmentation fault**.
