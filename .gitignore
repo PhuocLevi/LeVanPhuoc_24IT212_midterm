@@ -1,0 +1,22 @@
+# Compiled binaries
+ls
+*.out
+
+# Object files
+*.o
+
+# Build directory / artifacts
+build/
+bin/
+obj/
+
+# Temporary / editor files
+*.swp
+*~
+.DS_Store
+.vscode/
+.idea/
+
+# Test temp directories
+test_dir/
+test_tmp*/
