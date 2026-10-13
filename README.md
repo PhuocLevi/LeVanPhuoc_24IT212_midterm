@@ -1,17 +1,3 @@
-# TRƯỜNG ĐẠI HỌC CÔNG NGHỆ THÔNG TIN VÀ TRUYỀN THÔNG VIỆT HÀN
-## KHOA KHOA HỌC MÁY TÍNH
-***
-
-# BÁO CÁO ĐỒ ÁN GIỮA KÌ 1
-### ĐỀ TÀI: XÂY DỰNG PHIÊN BẢN ĐƠN GIẢN CỦA LỆNH LS(1)
-
-* **Sinh viên thực hiện:** Lê Văn Phước — **MSSV:** 24IT212
-* **Lớp:** 24IT2
-* **Giảng viên hướng dẫn:** TS. Nguyễn Nhật Ân
-* **Đà Nẵng, tháng 10 năm 2026**
-
-***
-
 ## 1. Giới thiệu
 
 `ls` là một trong những lệnh cơ bản và được sử dụng thường xuyên nhất trên hệ điều hành UNIX/Linux, dùng để liệt kê nội dung thư mục. Mặc dù giao diện đơn giản đối với người dùng, nhưng để cài đặt được nó cần vận dụng nhiều kiến thức cốt lõi và quan trọng của lập trình hệ thống như:
@@ -185,42 +171,3 @@ Một số ví dụ thực thi chương trình:
 make clean
 ```
 Lệnh sẽ xóa sạch: `main.o`, `options.o`, `list.o`, `format.o`, `util.o`, `myls`, `ls`. Các tệp mã nguồn gốc `.c`, `.h` và tài liệu được bảo toàn nguyên vẹn.
-
-## 7. Kiểm thử
-
-Chương trình `myls` đã được kiểm thử trực tiếp trên hệ điều hành **NetBSD 10.1** và đối chiếu song song với lệnh `ls` gốc của hệ thống (`/bin/ls`). Toàn bộ 12 nhóm kiểm thử (gồm 38 ca kiểm thử tự động trong `tests/test_ls.sh`) đều đạt kết quả **PASS 100%**:
-
-```bash
-make test
-```
-
-### Kết quả chi tiết các nội dung kiểm thử:
-1. **Hiển thị cơ bản & Mặc định:** Đúng định dạng 1 mục/dòng, ẩn chính xác các file bắt đầu bằng dấu chấm (`.`).
-2. **Tùy chọn file ẩn (-a, -A):** `-a` hiển thị đầy đủ `.` và `..`; `-A` hiển thị các file ẩn nhưng loại trừ chính xác `.` và `..`.
-3. **Định dạng dài (-l, -n):** Chuỗi mode 10 ký tự chính xác, hiển thị đầy đủ liên kết, owner, group, kích thước, thời gian; `-n` hiển thị dạng số numeric UID/GID; hiển thị chính xác `-> đích` của symlink; dòng `total` tính đúng tổng số block.
-4. **Phân loại tệp (-F):** Thêm đúng `/` cho thư mục, `*` cho file thực thi (`chmod +x`), `@` cho symbolic link.
-5. **Sắp xếp dữ liệu (-S, -t, -r, -f):** `-S` sắp file lớn nhất lên đầu; `-t` sắp file mới sửa đổi nhất lên đầu; `-r` đảo ngược thứ tự; `-f` xuất theo thứ tự thô của filesystem.
-6. **Kích thước và khối (-s, -k, -h):** Tính chính xác số block 512-byte; `-k` tính đúng block theo 1024 bytes; `-h` hiển thị đúng đơn vị nhân bản `B`, `K`, `M`.
-7. **Số hiệu Inode (-i):** In đúng số hiệu inode của hệ thống tập tin trước tên tệp.
-8. **Thư mục thường và đệ quy (-d, -R):** `-d` không duyệt vào thư mục; `-R` duyệt chính xác mọi thư mục con và bỏ qua `.`/`..`.
-9. **Ký tự không in được (-q, -w):** Tên file chứa byte điều khiển (ví dụ Bell `\007`) được chuyển thành dấu `?` với `-q` và giữ nguyên với `-w`.
-10. **Quy tắc ghi đè cờ (Precedence & Overrides):** Kiểm thử thành công các cặp cờ đối nghịch: `-d` vs `-R`, `-l` vs `-n`, `-k` vs `-h`, `-q` vs `-w`.
-11. **Thứ tự nhiều toán hạng:** File thường luôn hiển thị trước, các thư mục hiển thị sau cùng tiêu đề.
-12. **Xử lý lỗi & Mã thoát:** Khi gặp file không tồn tại, in lỗi ra `stderr` và trả về mã thoát `> 0`.
-
-*Chương trình cũng đã được kiểm tra tính an toàn bộ nhớ qua AddressSanitizer (`-fsanitize=address,undefined`), kết quả không xảy ra lỗi rò rỉ bộ nhớ (zero leaks) và không có lỗi truy cập vùng nhớ bất hợp pháp.*
-
-## 8. Quản lý mã nguồn và kho lưu trữ
-
-* Mã nguồn của dự án được quản lý chuyên nghiệp bằng hệ thống Git và lưu trữ công khai trên nền tảng GitHub:  
-  **URL GitHub:** [https://github.com/PhuocLevi/LeVanPhuoc_24IT212_midterm](https://github.com/PhuocLevi/LeVanPhuoc_24IT212_midterm)
-* Tệp `.gitignore` được cấu hình nghiêm ngặt nhằm đảm bảo không bao giờ commit các tệp nhị phân (`myls`, `ls`), các file đối tượng đối ứng (`*.o`), hay các tệp cấu hình IDE tạm thời.
-* Lịch sử commit được thực hiện tuần tự, mạch lạc, tuân thủ quy chuẩn Conventional Commits.
-
-## 9. Kết luận
-
-Đồ án đã xây dựng thành công chương trình `myls` bằng ngôn ngữ C trên hệ điều hành **NetBSD 10.1** (và tương thích với Linux), mô phỏng đầy đủ tập con các chức năng của lệnh `ls` theo đúng tài liệu NetBSD Manual Page được cung cấp.
-
-Chương trình triển khai hoàn chỉnh **19 tùy chọn**, hỗ trợ liệt kê tệp và thư mục, hiển thị thông tin chi tiết, tính toán số block, định dạng dung lượng dễ đọc, sắp xếp dữ liệu linh hoạt, xử lý liên kết tượng trưng và duyệt đệ quy mạnh mẽ.
-
-Mã nguồn được tổ chức thành **5 mô-đun chuẩn mực (`.c` và `.h`)**, có `Makefile` tự động hóa quá trình biên dịch và bộ kiểm thử tự động 38 ca kiểm thử. Chương trình biên dịch sạch sẽ không có cảnh báo (`warning`), chạy ổn định và **hoàn toàn không bị lỗi segmentation fault**.
