@@ -1,6 +1,9 @@
 #ifndef UTIL_H
 #define UTIL_H
 
+#ifndef _NETBSD_SOURCE
+#define _NETBSD_SOURCE
+#endif
 #ifndef _POSIX_C_SOURCE
 #define _POSIX_C_SOURCE 200809L
 #endif

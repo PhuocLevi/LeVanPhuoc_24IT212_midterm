@@ -6,6 +6,13 @@
 #include <pwd.h>
 #include <grp.h>
 
+#ifndef major
+#define major(x) ((int)(((uint32_t)(x) & 0x000fff00) >> 8))
+#endif
+#ifndef minor
+#define minor(x) ((int)((((uint32_t)(x) & 0xfff00000) >> 12) | (((uint32_t)(x) & 0x000000ff))))
+#endif
+
 /**
  * Cấu trúc chứa thông tin của một entry tệp tin / thư mục
  */

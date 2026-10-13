@@ -1,18 +1,18 @@
 #include "list.h"
 #include <dirent.h>
 
-#if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__APPLE__)
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__APPLE__)
 #define STAT_MTIME_NSEC(st) ((st)->st_mtimespec.tv_nsec)
 #define STAT_ATIME_NSEC(st) ((st)->st_atimespec.tv_nsec)
 #define STAT_CTIME_NSEC(st) ((st)->st_ctimespec.tv_nsec)
-#elif defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200809L
+#elif defined(st_mtimensec)
+#define STAT_MTIME_NSEC(st) ((st)->st_mtimensec)
+#define STAT_ATIME_NSEC(st) ((st)->st_atimensec)
+#define STAT_CTIME_NSEC(st) ((st)->st_ctimensec)
+#else
 #define STAT_MTIME_NSEC(st) ((st)->st_mtim.tv_nsec)
 #define STAT_ATIME_NSEC(st) ((st)->st_atim.tv_nsec)
 #define STAT_CTIME_NSEC(st) ((st)->st_ctim.tv_nsec)
-#else
-#define STAT_MTIME_NSEC(st) (0L)
-#define STAT_ATIME_NSEC(st) (0L)
-#define STAT_CTIME_NSEC(st) (0L)
 #endif
 
 static bool g_has_printed_anything = false;
